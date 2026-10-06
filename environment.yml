@@ -1,0 +1,12 @@
+name: latex-workflows
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - tectonic=0.17.0
+  - poppler
+  - pymupdf
+  - pillow
+  - pyyaml
+  - jsonschema>=4.20,<5
+  - conda-pack

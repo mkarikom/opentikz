@@ -28,13 +28,35 @@ your papers, made fast. Four ways to use it:
 - **PNG → TikZ** — hand the agent a figure image; get editable TikZ back.
 - **Describe → TikZ** — describe a figure in words; the agent drafts it from the library.
 
+## This fork: shared Codex and Claude figures
+
+The mkarikom fork exposes one shared skill through root `SKILL.md` and the
+existing Claude plugin entrypoint. Install the complete repository. The shared
+NFS catalog uses it as a submodule named `using-opentikz`; generated client
+links refer to that same source. It covers standalone scientific conceptual
+figures for papers, posters, and reports. Deck authoring remains with the
+selected slide skill. See [agent installation](docs/AGENT_INSTALL.md) for
+discovery, strict HPC activation, and the dedicated LaTeX environment.
+
+A portable Tectonic/Poppler workflow is provided alongside the original
+latexmk backends. After activating an environment from `environment.yml`:
+
+```bash
+python tools/render_figure.py --preflight
+python tools/render_figure.py /path/to/figure.tex --output-dir /path/to/exports
+python tools/validate.py --strict --engine tectonic
+```
+
+After warming the TeX cache, add `--offline` to the figure renderer to require
+cached support files. Inspect all exports before delivering them.
+
 ## Quick start
 
 **Use it with your AI agent (recommended).** Install the Claude Code plugin —
 run these as two separate Claude Code messages:
 
 ```text
-/plugin marketplace add https://github.com/opentikz/opentikz
+/plugin marketplace add https://github.com/mkarikom/opentikz
 /plugin install opentikz@opentikz
 ```
 

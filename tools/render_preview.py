@@ -4,6 +4,7 @@
 Pipeline (depends on backend):
   dvisvgm:  latexmk -dvi -> dvisvgm <dvi>     (-> <name>.svg beside the .tex)
   pdf2svg:  latexmk -pdf -> pdf2svg <pdf>
+  tectonic: tectonic -> pdftocairo -svg <pdf>
 
 Backends (``--backend``, default ``dvisvgm``):
   dvisvgm   Compile to DVI, then dvisvgm reads the DVI and converts to SVG,
@@ -13,9 +14,11 @@ Backends (``--backend``, default ``dvisvgm``):
             Ghostscript. Produces clean, self-contained SVG.
   pdf2svg   Compile to PDF, then pdf2svg (poppler-based, Ghostscript-free). The
             standalone class already crops to content, so no pdfcrop step.
+  tectonic  Compile to PDF with Tectonic, then Poppler's pdftocairo to SVG.
+            The dedicated shared LaTeX environment uses this backend.
 
-The final backend choice for the project is intentionally deferred; both are
-supported so previews can be compared on real content before committing to one.
+The legacy default is preserved for upstream contributors. Select the backend
+explicitly when using the dedicated Tectonic environment.
 
 Accepts a path to a single ``.tex`` file or to an item directory containing
 exactly one ``.tex``.
@@ -29,7 +32,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-BACKENDS = ("dvisvgm", "pdf2svg")
+BACKENDS = ("dvisvgm", "pdf2svg", "tectonic")
 
 
 def _require(*tools: str) -> None:
@@ -38,7 +41,7 @@ def _require(*tools: str) -> None:
         sys.exit(
             "error: required tool(s) not found on PATH: "
             + ", ".join(missing)
-            + "\n       install a LaTeX distribution (latexmk) and the SVG backend."
+            + "\n       install the selected compiler and SVG backend."
         )
 
 
@@ -126,19 +129,28 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.backend == "dvisvgm":
         _require("latexmk", "dvisvgm")
-    else:
+    elif args.backend == "pdf2svg":
         _require("latexmk", "pdf2svg")
+    else:
+        _require("tectonic", "pdftocairo")
 
     with tempfile.TemporaryDirectory(prefix="opentikz-render-") as tmp:
         work = Path(tmp)
         try:
             if args.backend == "dvisvgm":
                 _render_dvisvgm(_latexmk(tex, work, "dvi"), svg)
-            else:
+            elif args.backend == "pdf2svg":
                 _render_pdf2svg(_latexmk(tex, work, "pdf"), svg)
+            else:
+                from render_figure import compile_pdf
+                pdf, _ = compile_pdf(tex.resolve(), work)
+                subprocess.run(["pdftocairo", "-svg", str(pdf), str(svg.resolve())],
+                               check=True, capture_output=True, text=True)
         except subprocess.CalledProcessError as exc:
             out = (exc.stdout or "") + (exc.stderr or "")
             sys.exit(f"error: {args.backend} failed\n{out.strip()}")
+        except (RuntimeError, OSError, subprocess.TimeoutExpired) as exc:
+            sys.exit(f"error: {args.backend} failed\n{exc}")
 
     print(f"wrote {svg}")
     return 0

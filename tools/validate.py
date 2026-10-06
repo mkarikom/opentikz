@@ -161,13 +161,20 @@ def _load_validator(root: Path):
     return cls(schema)
 
 
-def _latex_available() -> bool:
-    return shutil.which("latexmk") is not None
+def _latex_available(engine: str = "latexmk") -> bool:
+    return shutil.which(engine) is not None
 
 
-def _compile_tex(tex: Path) -> tuple[bool, str]:
+def _compile_tex(tex: Path, engine: str = "latexmk") -> tuple[bool, str]:
     """Compile a standalone .tex with latexmk in a temp dir. Returns (ok, log)."""
     with tempfile.TemporaryDirectory(prefix="opentikz-build-") as tmp:
+        if engine == "tectonic":
+            from render_figure import compile_pdf
+            try:
+                _, log = compile_pdf(tex.resolve(), Path(tmp))
+                return True, log
+            except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
+                return False, str(exc)
         proc = subprocess.run(
             [
                 "latexmk",
@@ -197,15 +204,16 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="only validate metadata; never attempt to compile .tex.",
     )
+    parser.add_argument("--engine", choices=("latexmk", "tectonic"), default="latexmk")
     args = parser.parse_args(argv)
 
     root = repo_root()
     validator = _load_validator(root)
 
-    have_latex = _latex_available()
+    have_latex = _latex_available(args.engine)
     do_compile = not args.no_compile
     if do_compile and not have_latex and not args.strict:
-        print("note: latexmk not found; .tex compilation will be SKIPPED")
+        print(f"note: {args.engine} not found; .tex compilation will be SKIPPED")
 
     n_pass = n_fail = n_skip = 0
     failures: list[str] = []
@@ -274,14 +282,14 @@ def main(argv: list[str] | None = None) -> int:
             continue
         if not have_latex:
             if args.strict:
-                print(f"FAIL  {item}: latexmk not found (--strict)")
+                print(f"FAIL  {item}: {args.engine} not found (--strict)")
                 n_fail += 1
                 failures.append(item)
             else:
-                print(f"SKIP  {item}: latexmk not found")
+                print(f"SKIP  {item}: {args.engine} not found")
                 n_skip += 1
             continue
-        ok, log = _compile_tex(tex)
+        ok, log = _compile_tex(tex, args.engine)
         if ok:
             print(f"PASS  {item}")
             n_pass += 1
